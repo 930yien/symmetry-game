@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>對稱能量守衛戰</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
+        
+        :root {
+            --neon-blue: #00f3ff;
+            --neon-pink: #ff00ff;
+            --neon-green: #00ff9f;
+            --dark-bg: #020617;
+        }
+
+        body {
+            font-family: 'Noto+Sans+TC', sans-serif;
+            background-color: var(--dark-bg);
+            color: #fff;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        /* 動態星空底層 */
+        .stars-container {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            background: radial-gradient(circle at 50% 50%, #0f172a 0%, #020617 100%);
+        }
+
+        .star {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            opacity: 0.5;
+            animation: twinkle var(--duration) infinite ease-in-out;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.3); }
+        }
+
+        /* 霓虹邊框樣式 */
+        .neon-border-blue {
+            box-shadow: 0 0 20px var(--neon-blue), inset 0 0 10px var(--neon-blue);
+            border: 3px solid var(--neon-blue);
+        }
+
+        .neon-border-pink {
+            box-shadow: 0 0 20px var(--neon-pink), inset 0 0 10px var(--neon-pink);
+            border: 3px solid var(--neon-pink);
+        }
+
+        /* 能量條 */
+        .energy-bar-container {
+            width: 200px;
+            height: 24px;
+            background: #1e293b;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid #334155;
+        }
+
+        #energy-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--neon-green), var(--neon-blue));
+            box-shadow: 0 0 20px var(--neon-green);
+            transition: width 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .floating {
+            animation: floating 4s ease-in-out infinite;
+            filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.6));
+        }
+
+        @keyframes floating {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(5deg); }
+        }
+
+        .drop-zone.drag-over {
+            transform: scale(1.05);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* 頁面切換 */
+        .page {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            transition: opacity 0.5s ease;
+            z-index: 50;
+        }
+
+        .hidden-page {
+            opacity: 0;
+            pointer-events: none;
+            display: none;
+        }
+
+        .glitch-text {
+            text-shadow: 3px 3px var(--neon-pink), -3px -3px var(--neon-blue);
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <!-- 星空背景 -->
+    <div id="stars" class="stars-container"></div>
+
+    <!-- 第一層：封面頁（結合學生登入） -->
+    <div id="page-cover" class="page">
+        <div class="text-center mb-6">
+            <div class="text-7xl mb-4 animate-bounce">🚀</div>
+            <h1 class="text-5xl md:text-7xl font-black glitch-text mb-4 tracking-tight">對稱能量守衛戰</h1>
+            <p class="text-xl text-cyan-400 font-bold tracking-[0.3em]">星際幾何探險 ‧ 學習履歷紀錄</p>
+        </div>
+
+        <!-- 學生身分登入卡片 -->
+        <div class="bg-slate-900/90 border-2 border-cyan-400/50 p-6 rounded-3xl max-w-md w-full shadow-[0_0_40px_rgba(0,243,255,0.2)] mb-6 backdrop-blur">
+            <h3 class="text-lg font-bold text-cyan-300 text-center mb-4">探險家身分登入</h3>
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs text-gray-400 font-bold block mb-1">班級</label>
+                    <input type="text" id="input-class" placeholder="例如：501" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-cyan-400 text-center text-lg">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs text-gray-400 font-bold block mb-1">座號</label>
+                        <input type="number" id="input-seat" placeholder="例如：12" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-cyan-400 text-center text-lg">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400 font-bold block mb-1">姓名</label>
+                        <input type="text" id="input-name" placeholder="王小明" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-cyan-400 text-center text-lg">
+                    </div>
+                </div>
+            </div>
+            <p id="login-error" class="text-pink-400 text-xs text-center mt-3 hidden font-bold">請填妥班級、座號與姓名再出發喔！</p>
+        </div>
+
+        <button onclick="handleLoginAndProceed()" class="px-14 py-4 bg-transparent border-4 border-cyan-400 text-cyan-400 text-2xl font-black rounded-full hover:bg-cyan-400 hover:text-black transition-all shadow-[0_0_30px_rgba(34,211,238,0.5)] active:scale-95">
+            登入並閱讀任務簡報
+        </button>
+    </div>
+
+    <!-- 第二層：任務簡報頁 -->
+    <div id="page-briefing" class="page hidden-page">
+        <div class="bg-slate-900/90 border-4 border-cyan-400 p-8 md:p-12 max-w-2xl w-full rounded-[3rem] shadow-[0_0_100px_rgba(0,243,255,0.2)] text-center backdrop-blur-md">
+            <h2 class="text-4xl font-black text-cyan-400 mb-6 tracking-tight border-b-2 border-cyan-400/30 pb-4">星際探險任務簡報</h2>
+            
+            <div class="space-y-5 text-left text-gray-200 text-base md:text-lg leading-relaxed mb-8">
+                <p>探險家 <span id="display-student-name" class="text-cyan-300 font-bold"></span>，我們正駕駛火箭穿越「幾何星系」，目前的推進燃料嚴重不足！</p>
+                <div class="bg-white/5 p-5 rounded-3xl border border-white/10 space-y-3 text-sm md:text-base">
+                    <p class="flex items-start gap-3">
+                        <span class="text-2xl">🔋</span>
+                        <span><b>收集推進能量</b>：將漂浮的物質正確分類，就能為火箭增加推進力。</span>
+                    </p>
+                    <p class="flex items-start gap-3">
+                        <span class="text-2xl">🛡️</span>
+                        <span><b>防護盾牌</b>：你擁有 3 層防護盾，若辨識錯誤，盾牌能量會受損。</span>
+                    </p>
+                    <p class="flex items-start gap-3">
+                        <span class="text-2xl">✨</span>
+                        <span><b>線對稱判定</b>：若物質能經由對折後「兩邊完全重合」，就是線對稱圖形。</span>
+                    </p>
+                </div>
+                <p class="text-center font-bold text-white italic">系統已就緒，準備啟動數據掃描了嗎？</p>
+            </div>
+            
+            <button onclick="goToPage('game')" class="w-full py-5 bg-cyan-500 hover:bg-white text-black font-black text-2xl rounded-2xl transition-all shadow-lg active:scale-95">
+                啟動系統，開始探險！
+            </button>
+        </div>
+    </div>
+
+    <!-- 第三層：正式遊戲活動內容 -->
+    <div id="page-game" class="page hidden-page flex flex-col justify-between py-8">
+        
+        <!-- 頂部狀態列 -->
+        <div class="w-full max-w-5xl flex justify-between items-end px-6">
+            <div>
+                <div class="text-xs text-gray-400 mb-1">
+                    探險家：<span id="player-hud-name" class="text-cyan-300 font-bold"></span>
+                </div>
+                <p class="text-sm font-bold text-cyan-400 mb-2 tracking-widest uppercase">火箭推進能量</p>
+                <div class="flex items-center gap-4">
+                    <div class="energy-bar-container">
+                        <div id="energy-fill"></div>
+                    </div>
+                    <span id="energy-text" class="text-2xl font-black text-neon-green italic">0%</span>
+                </div>
+            </div>
+            <div class="text-right">
+                <p class="text-sm font-bold text-pink-500 mb-2 tracking-widest uppercase">防護盾狀態</p>
+                <div id="lives-display" class="text-4xl drop-shadow-[0_0_15px_rgba(236,72,153,0.8)]">❤️❤️❤️</div>
+            </div>
+        </div>
+
+        <!-- 核心互動區域 -->
+        <div class="w-full max-w-7xl grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12 items-center flex-grow px-4">
+            
+            <!-- 線對稱區域 -->
+            <div id="zone-symmetric" class="drop-zone h-72 md:h-[28rem] rounded-[3.5rem] neon-border-blue bg-cyan-900/10 flex flex-col items-center justify-center relative group overflow-hidden" data-type="true">
+                <div class="absolute inset-0 bg-gradient-to-b from-cyan-400/5 to-transparent"></div>
+                <div class="text-7xl md:text-8xl opacity-10 group-hover:opacity-40 transition-all duration-500">⚖️</div>
+                <h2 class="text-3xl md:text-4xl font-black text-cyan-400 mt-6 tracking-tight">線對稱圖形</h2>
+                <p class="text-cyan-600/80 text-xs md:text-sm font-bold mt-4 bg-cyan-950 px-6 py-2 rounded-full border border-cyan-800">對折後完全重合</p>
+            </div>
+
+            <!-- 中央傳送門 -->
+            <div class="flex flex-col items-center justify-center">
+                <div class="relative w-64 h-64 md:w-80 md:h-80 flex items-center justify-center">
+                    <div class="absolute inset-0 border-4 border-dashed border-cyan-500/20 rounded-full animate-[spin_20s_linear_infinite]"></div>
+                    <div class="absolute inset-8 border-2 border-pink-500/10 rounded-full animate-[spin_15s_linear_infinite_reverse]"></div>
+                    <div class="absolute inset-0 bg-cyan-400/5 rounded-full blur-3xl"></div>
+                    <div id="item-container" class="z-30">
+                        <!-- 圖案由 JS 注入 -->
+                    </div>
+                </div>
+                <div class="mt-6 bg-black/40 border border-white/10 px-8 py-2.5 rounded-2xl text-[12px] text-cyan-300/50 tracking-[0.3em] font-black uppercase">
+                    物質掃描分析中...
+                </div>
+            </div>
+
+            <!-- 非線對稱區域 -->
+            <div id="zone-asymmetric" class="drop-zone h-72 md:h-[28rem] rounded-[3.5rem] neon-border-pink bg-pink-900/10 flex flex-col items-center justify-center relative group overflow-hidden" data-type="false">
+                <div class="absolute inset-0 bg-gradient-to-b from-pink-500/5 to-transparent"></div>
+                <div class="text-7xl md:text-8xl opacity-10 group-hover:opacity-40 transition-all duration-500">🌀</div>
+                <h2 class="text-3xl md:text-4xl font-black text-pink-500 mt-6 tracking-tight">非線對稱圖形</h2>
+                <p class="text-pink-600/80 text-xs md:text-sm font-bold mt-4 bg-pink-950 px-6 py-2 rounded-full border border-pink-800">對折後無法重合</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 任務反饋彈窗 -->
+    <div id="feedback-modal" class="fixed inset-0 z-[200] flex items-center justify-center p-4 hidden bg-black/60 backdrop-blur-sm">
+        <div class="bg-slate-900 border-4 border-cyan-400 p-8 md:p-10 max-w-md w-full rounded-[3rem] shadow-[0_0_100px_rgba(0,243,255,0.4)] text-center border-t-[16px]">
+            <div id="modal-icon" class="text-8xl mb-6"></div>
+            <h3 id="modal-title" class="text-3xl md:text-4xl font-black mb-4 tracking-tight"></h3>
+            <p id="modal-message" class="text-gray-300 text-base md:text-lg mb
