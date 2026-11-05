@@ -246,4 +246,363 @@
         <div class="bg-slate-900 border-4 border-cyan-400 p-8 md:p-10 max-w-md w-full rounded-[3rem] shadow-[0_0_100px_rgba(0,243,255,0.4)] text-center border-t-[16px]">
             <div id="modal-icon" class="text-8xl mb-6"></div>
             <h3 id="modal-title" class="text-3xl md:text-4xl font-black mb-4 tracking-tight"></h3>
-            <p id="modal-message" class="text-gray-300 text-base md:text-lg mb
+            <p id="modal-message" class="text-gray-300 text-base md:text-lg mb-8 leading-relaxed px-2"></p>
+            <button id="next-btn" class="w-full py-4 bg-cyan-500 text-black font-black text-xl rounded-2xl hover:bg-white transition-all active:scale-95 shadow-xl">
+                繼續探索任務
+            </button>
+        </div>
+    </div>
+
+    <!-- 遊戲結算頁面 -->
+    <div id="page-over" class="page hidden-page bg-black">
+        <div class="text-center p-6 max-w-xl">
+            <h2 class="text-6xl md:text-7xl font-black text-white mb-4 italic tracking-tighter">探測任務結束</h2>
+            <p class="text-cyan-400 tracking-[0.5em] text-lg mb-8">收集能量數據分析完畢</p>
+            
+            <div class="bg-white/5 p-8 md:p-10 rounded-[3rem] border border-white/10 mb-8 shadow-2xl backdrop-blur-xl">
+                <div class="text-gray-400 text-sm uppercase mb-3 font-bold tracking-widest">最終推進能量</div>
+                <div class="text-7xl md:text-8xl font-black text-neon-green leading-none italic mb-4" id="final-score">0%</div>
+                <p id="save-status" class="text-cyan-300 text-sm font-medium animate-pulse">正在上傳學習診斷記錄至 Google 試算表...</p>
+            </div>
+
+            <button onclick="location.reload()" class="border-4 border-white px-12 py-4 rounded-full text-white text-2xl font-black hover:bg-white hover:text-black transition-all active:scale-90 shadow-[0_0_50px_rgba(255,255,255,0.3)]">
+                再次重啟任務
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 老師設定專區：已填入您的 Google Apps Script 網頁應用程式 URL
+        // ==========================================
+        const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwF3cYZzlrLboVIXCRIbKedO1rHugMKvFLlB7ieUfk6ynSrgdtuX_SabjN5h2tUJ_TU/exec";
+
+        // 學生資訊物件
+        let studentInfo = {
+            className: "",
+            seatNumber: "",
+            studentName: ""
+        };
+
+        // 學習歷程追蹤資料結構
+        let gameSessionLog = {
+            startTime: null,
+            endTime: null,
+            itemLogs: [],      // 每一題的詳細紀錄
+            mistakeItems: []   // 答錯的物件清單
+        };
+
+        // 題庫項目
+        const items = [
+            { name: '瓢蟲', icon: '🐞', isSymmetric: true, message: '推進能量 +10！瓢蟲的翅膀完全對稱，是完美的推進核心。' },
+            { name: '茶壺', icon: '🫖', isSymmetric: false, message: '異形物質確認。茶壺不論怎麼對折都無法重合，具備獨特能量。' },
+            { name: '貓熊臉', icon: '🐼', isSymmetric: true, message: '成功校準！貓熊的五官呈現標準對稱，提供了穩定的能源。' },
+            { name: '音符', icon: '🎵', isSymmetric: false, message: '非對稱信號確認。這種形狀能產生跳動的頻率，增加火箭動力！' },
+            { name: '星星', icon: '⭐', isSymmetric: true, message: '捕捉到高純度能量！星星具有多軸對稱，大幅提升了推進效率。' },
+            { name: '手掌', icon: '✋', isSymmetric: false, message: '不對稱數據已記錄。手掌的構造不具備對稱特性，也是珍貴的樣本。' }
+        ];
+
+        let score = 0;
+        let lives = 3;
+        let currentItemIndex = 0;
+        let gameItems = [];
+        let isDragging = false;
+        let activeElement = null;
+        let itemStartTime = null;
+
+        // 初始化星空
+        const starsContainer = document.getElementById('stars');
+        for (let i = 0; i < 120; i++) {
+            const star = document.createElement('div');
+            star.className = 'star';
+            const size = Math.random() * 3 + 1;
+            star.style.width = size + 'px';
+            star.style.height = size + 'px';
+            star.style.left = Math.random() * 100 + '%';
+            star.style.top = Math.random() * 100 + '%';
+            star.style.setProperty('--duration', (Math.random() * 3 + 2) + 's');
+            starsContainer.appendChild(star);
+        }
+
+        // 登入驗證
+        function handleLoginAndProceed() {
+            const cls = document.getElementById('input-class').value.trim();
+            const seat = document.getElementById('input-seat').value.trim();
+            const name = document.getElementById('input-name').value.trim();
+            const errEl = document.getElementById('login-error');
+
+            if (!cls || !seat || !name) {
+                errEl.classList.remove('hidden');
+                return;
+            }
+
+            errEl.classList.add('hidden');
+            studentInfo.className = cls;
+            studentInfo.seatNumber = seat;
+            studentInfo.studentName = name;
+
+            document.getElementById('display-student-name').innerText = `${cls} 班 ${seat} 號 ${name}`;
+            document.getElementById('player-hud-name').innerText = `${seat} 號 ${name}`;
+
+            goToPage('briefing');
+        }
+
+        // 頁面切換邏輯
+        function goToPage(pageId) {
+            document.querySelectorAll('.page').forEach(p => p.classList.add('hidden-page'));
+            const target = document.getElementById('page-' + pageId);
+            target.classList.remove('hidden-page');
+            
+            if (pageId === 'game') {
+                initGame();
+            }
+        }
+
+        function initGame() {
+            // 洗牌出 6 題
+            gameItems = [...items].sort(() => Math.random() - 0.5);
+            currentItemIndex = 0;
+            score = 0;
+            lives = 3;
+            gameSessionLog.startTime = new Date();
+            gameSessionLog.itemLogs = [];
+            gameSessionLog.mistakeItems = [];
+
+            updateEnergy();
+            updateLives();
+            showNextItem();
+        }
+
+        function updateEnergy() {
+            const percentage = Math.round((score / 60) * 100);
+            document.getElementById('energy-fill').style.width = percentage + '%';
+            document.getElementById('energy-text').innerText = percentage + '%';
+        }
+
+        function updateLives() {
+            document.getElementById('lives-display').innerText = "❤️".repeat(Math.max(0, lives));
+            if (lives <= 0) {
+                endGame();
+            }
+        }
+
+        function showNextItem() {
+            if (currentItemIndex >= gameItems.length) {
+                endGame();
+                return;
+            }
+
+            itemStartTime = new Date(); // 紀錄該題作答開始時間
+
+            const container = document.getElementById('item-container');
+            container.innerHTML = '';
+            const item = gameItems[currentItemIndex];
+            const div = document.createElement('div');
+            div.className = 'item-card text-8xl md:text-9xl floating select-none cursor-grab active:cursor-grabbing';
+            div.innerText = item.icon;
+            div.id = 'draggable-item';
+            container.appendChild(div);
+
+            div.addEventListener('mousedown', dragStart);
+            div.addEventListener('touchstart', dragStart, { passive: false });
+        }
+
+        function dragStart(e) {
+            isDragging = true;
+            activeElement = e.target;
+            activeElement.classList.remove('floating');
+            
+            let cx = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+            let cy = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+
+            const rect = activeElement.getBoundingClientRect();
+            activeElement.style.position = 'fixed';
+            activeElement.style.zIndex = '1000';
+            activeElement.style.width = rect.width + 'px';
+            activeElement.style.height = rect.height + 'px';
+            
+            moveAt(cx, cy);
+
+            const dragMove = (me) => {
+                if (!isDragging) return;
+                if (me.type === 'touchmove') me.preventDefault();
+                let mx = me.type === 'touchmove' ? me.touches[0].clientX : me.clientX;
+                let my = me.type === 'touchmove' ? me.touches[0].clientY : me.clientY;
+                moveAt(mx, my);
+            };
+
+            const dragEnd = (ee) => {
+                if (!isDragging) return;
+                isDragging = false;
+                
+                let ex = ee.type === 'touchend' ? ee.changedTouches[0].clientX : ee.clientX;
+                let ey = ee.type === 'touchend' ? ee.changedTouches[0].clientY : ee.clientY;
+
+                document.removeEventListener('mousemove', dragMove);
+                document.removeEventListener('touchmove', dragMove);
+                document.removeEventListener('mouseup', dragEnd);
+                document.removeEventListener('touchend', dragEnd);
+
+                const zones = document.querySelectorAll('.drop-zone');
+                let dropped = false;
+
+                zones.forEach(zone => {
+                    const zRect = zone.getBoundingClientRect();
+                    zone.classList.remove('drag-over');
+                    if (ex > zRect.left && ex < zRect.right && ey > zRect.top && ey < zRect.bottom) {
+                        const isSymmetricDrop = zone.getAttribute('data-type') === 'true';
+                        checkAnswer(isSymmetricDrop);
+                        dropped = true;
+                    }
+                });
+
+                if (!dropped) {
+                    activeElement.style.position = 'relative';
+                    activeElement.style.left = '0';
+                    activeElement.style.top = '0';
+                    activeElement.style.width = 'auto';
+                    activeElement.style.height = 'auto';
+                    activeElement.classList.add('floating');
+                }
+            };
+
+            document.addEventListener('mousemove', dragMove);
+            document.addEventListener('touchmove', dragMove, { passive: false });
+            document.addEventListener('mouseup', dragEnd);
+            document.addEventListener('touchend', dragEnd);
+        }
+
+        function moveAt(x, y) {
+            activeElement.style.left = x - activeElement.offsetWidth / 2 + 'px';
+            activeElement.style.top = y - activeElement.offsetHeight / 2 + 'px';
+            
+            const zones = document.querySelectorAll('.drop-zone');
+            zones.forEach(zone => {
+                const rect = zone.getBoundingClientRect();
+                if (x > rect.left && x < rect.right && y > rect.top && y < rect.bottom) {
+                    zone.classList.add('drag-over');
+                } else {
+                    zone.classList.remove('drag-over');
+                }
+            });
+        }
+
+        function checkAnswer(userChoice) {
+            const item = gameItems[currentItemIndex];
+            const isCorrect = userChoice === item.isSymmetric;
+            const spendSeconds = ((new Date() - itemStartTime) / 1000).toFixed(1);
+
+            // 記錄作答細節指標
+            gameSessionLog.itemLogs.push({
+                item: item.name,
+                correctType: item.isSymmetric ? "線對稱" : "非線對稱",
+                studentChoice: userChoice ? "線對稱" : "非線對稱",
+                isCorrect: isCorrect,
+                spendSeconds: parseFloat(spendSeconds)
+            });
+
+            if (isCorrect) {
+                score += 10;
+                showFeedback(true, item);
+            } else {
+                lives -= 1;
+                gameSessionLog.mistakeItems.push(item.name);
+                showFeedback(false, item);
+            }
+            
+            updateEnergy();
+            updateLives();
+        }
+
+        function showFeedback(isCorrect, item) {
+            const modal = document.getElementById('feedback-modal');
+            const title = document.getElementById('modal-title');
+            const icon = document.getElementById('modal-icon');
+            const msg = document.getElementById('modal-message');
+
+            modal.classList.remove('hidden');
+            if (isCorrect) {
+                icon.innerText = '⚡';
+                title.innerText = '辨識成功！';
+                title.className = 'text-3xl md:text-4xl font-black mb-4 text-cyan-400';
+                msg.innerText = item.message;
+            } else {
+                icon.innerText = '🚀';
+                title.innerText = '偵測異常...';
+                title.className = 'text-3xl md:text-4xl font-black mb-4 text-pink-500';
+                msg.innerText = `失敗是校準思維的過程！想一想：「${item.name}」如果進行「對折」，兩邊能完全重疊合在一起嗎？再試一次！`;
+            }
+        }
+
+        document.getElementById('next-btn').onclick = () => {
+            document.getElementById('feedback-modal').classList.add('hidden');
+            currentItemIndex++;
+            showNextItem();
+        };
+
+        function endGame() {
+            gameSessionLog.endTime = new Date();
+            goToPage('over');
+            
+            const finalScorePercentage = document.getElementById('energy-text').innerText;
+            document.getElementById('final-score').innerText = finalScorePercentage;
+
+            // 送出學習數據到 Google Sheets
+            uploadLearningData(finalScorePercentage);
+        }
+
+        // 上傳數據至 Google Apps Script
+        function uploadLearningData(finalScorePercentage) {
+            const statusEl = document.getElementById('save-status');
+            
+            // 計算總時長與每題平均時間
+            const totalSec = Math.round((gameSessionLog.endTime - gameSessionLog.startTime) / 1000);
+            const totalAnswered = gameSessionLog.itemLogs.length;
+            const avgSec = totalAnswered > 0 ? (totalSec / totalAnswered).toFixed(1) : 0;
+            const correctCount = gameSessionLog.itemLogs.filter(i => i.isCorrect).length;
+            const wrongCount = gameSessionLog.itemLogs.filter(i => !i.isCorrect).length;
+
+            const payload = {
+                timestamp: new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" }),
+                className: studentInfo.className,
+                seatNumber: studentInfo.seatNumber,
+                studentName: studentInfo.studentName,
+                finalScore: finalScorePercentage,
+                remainingLives: lives,
+                correctCount: correctCount,
+                wrongCount: wrongCount,
+                mistakeItems: gameSessionLog.mistakeItems.length > 0 ? gameSessionLog.mistakeItems.join("、") : "完全正確",
+                totalDurationSec: totalSec,
+                avgItemSeconds: parseFloat(avgSec),
+                detailedLog: JSON.stringify(gameSessionLog.itemLogs)
+            };
+
+            if (!GAS_API_URL || GAS_API_URL === "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE") {
+                statusEl.innerText = "💡 提醒：尚未設定 Google Apps Script 網址，本次數據僅保留於本地端。";
+                statusEl.classList.remove('animate-pulse');
+                return;
+            }
+
+            // 發送 POST 請求
+            fetch(GAS_API_URL, {
+                method: "POST",
+                mode: "no-cors",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(() => {
+                statusEl.innerText = "✅ 探險學習履歷已成功儲存至 Google 試算表！";
+                statusEl.classList.remove('animate-pulse');
+                statusEl.classList.add('text-green-400');
+            })
+            .catch(err => {
+                console.error("Upload error:", err);
+                statusEl.innerText = "⚠️ 紀錄傳送中（若試算表有新增列即表示成功）。";
+                statusEl.classList.remove('animate-pulse');
+            });
+        }
+    </script>
+</body>
+</html>
